@@ -1,5 +1,2 @@
 name = "cicadan-os"
 pages_build_output_dir = "."
-
-[build]
-command = "exit 0"
