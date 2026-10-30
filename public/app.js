@@ -1,67 +1,99 @@
 // public/app.js
 
-// 1. Load the list of tasks and build the menu
-async function loadTaskMenu() {
-  const taskListContainer = document.getElementById('task-list');
-  if (!taskListContainer) return;
+// 1. Fetch the list of tasks and populate the Ledger
+async function loadLedgerTasks() {
+  const ledgerContainer = document.querySelector('.ledger-container');
+  if (!ledgerContainer) return;
 
   try {
-    // Fetch the index.json we discussed earlier
-    const response = await fetch('/task/index.json');
-    if (!response.ok) throw new Error("Could not load task index");
-    
-    const tasks = await response.json();
-    taskListContainer.innerHTML = ''; // Clear loading text
+    const res = await fetch('/task/index.json'); // Ensure this file exists!
+    const tasks = await res.json();
 
-    // Loop through the tasks and create a button for each
-    tasks.forEach(task => {
-      const btn = document.createElement('button');
-      btn.className = 'task-btn';
-      btn.textContent = `> ${task.title}`;
-      btn.onclick = () => loadTaskDetails(task.id);
-      taskListContainer.appendChild(btn);
+    // Clear the hardcoded HTML (we will rebuild it)
+    ledgerContainer.innerHTML = '<div class="ledger-header">[CLASSIFIED ARCHIVE // AUTHORIZED EYES ONLY]</div>';
+
+    tasks.forEach((task, index) => {
+      const section = document.createElement('div');
+      section.className = 'ledger-section';
+      
+      // If it's not the first task, obfuscate it initially
+      if (index > 0) {
+        section.classList.add('obfuscated-container');
+        section.id = `task-${task.id}-section`;
+      }
+
+      section.innerHTML = `
+        <div class="task-title">
+          <span>TASK ${task.id.toString().padStart(2, '0')}: ${task.title}</span>
+          <span class="status-tag ${index === 0 ? 'status-unlocked' : 'status-locked'}" id="task-${task.id}-status">
+            ${index === 0 ? 'UNLOCKED' : 'LOCKED'}
+          </span>
+        </div>
+        <p>${task.description}</p>
+      `;
+
+      // Add the gate box to the FIRST task only
+      if (index === 0) {
+        section.innerHTML += `
+          <div class="gate-box">
+            <div class="gate-label">Decrypt Key to Next Chapter</div>
+            <div class="gate-input-row">
+              <input type="text" class="gate-input" id="task-${task.id}-key-input" placeholder="Enter Key..." autocomplete="off">
+              <button class="gate-btn" id="task-${task.id}-unlock-btn">DECRYPT</button>
+            </div>
+            <div id="gate-msg" style="font-size: 0.78rem; display: none;"></div>
+          </div>
+        `;
+      }
+
+      ledgerContainer.appendChild(section);
     });
 
+    // Re-attach the unlock logic for Task 1
+    attachTask1Logic();
+
   } catch (error) {
-    console.error("Error loading menu:", error);
-    taskListContainer.innerHTML = '<p style="color:red;">Error loading task list.</p>';
+    console.error("Failed to load ledger:", error);
   }
 }
 
-// 2. Fetch a specific task by ID and display it
-async function loadTaskDetails(taskId) {
-  const contentArea = document.getElementById('task-content');
-  if (!contentArea) return;
+// 2. Logic for unlocking the next task
+function attachTask1Logic() {
+  const btn = document.getElementById('task-1-unlock-btn');
+  const input = document.getElementById('task-1-key-input');
+  const gateMsg = document.getElementById('gate-msg');
 
-  contentArea.innerHTML = '<p>Decrypting task data...</p>';
+  if (!btn) return;
 
-  try {
-    // Call your Cloudflare Function
-    const response = await fetch(`/api/tasks?id=${taskId}`);
-    
-    if (!response.ok) {
-      if (response.status === 404) throw new Error("Task not found.");
-      throw new Error("Server error.");
+  const checkKey = async () => {
+    // In a real app, you would verify this via a Cloudflare Function
+    // For now, we keep your hardcoded key: 0x14061994
+    if (input.value.trim() === '0x14061994') {
+      if(window.AudioEngine) window.AudioEngine.playSuccess();
+      
+      const task2Section = document.getElementById('task-2-section');
+      if(task2Section) {
+        task2Section.classList.add('unlocked');
+        document.getElementById('task-2-status').textContent = 'UNLOCKED';
+        document.getElementById('task-2-status').className = 'status-tag status-unlocked';
+      }
+
+      gateMsg.style.display = 'block';
+      gateMsg.style.color = 'var(--term-green)';
+      gateMsg.textContent = 'Decryption key verified. Chapter 02 unblurred.';
+    } else {
+      if(window.AudioEngine) window.AudioEngine.playError();
+      gateMsg.style.display = 'block';
+      gateMsg.style.color = 'var(--term-red)';
+      gateMsg.textContent = 'Invalid Decryption Key. Access Denied.';
     }
+  };
 
-    const data = await response.json();
-
-    // Update the UI with the task data
-    contentArea.innerHTML = `
-      <h2>${data.title}</h2>
-      <p><strong>Status:</strong> ${data.status}</p>
-      <p>${data.description}</p>
-      <hr>
-      <small>Task ID: ${data.id}</small>
-    `;
-
-  } catch (error) {
-    console.error("Error loading task:", error);
-    contentArea.innerHTML = `<p style="color:red;">${error.message}</p>`;
-  }
+  btn.addEventListener('click', checkKey);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkKey(); });
 }
 
-// 3. Run the menu loader when the page loads
+// 3. Initialize the menu when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  loadTaskMenu();
+  loadLedgerTasks();
 });
